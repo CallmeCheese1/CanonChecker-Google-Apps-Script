@@ -1,0 +1,130 @@
+<script>
+// Elements
+const testButton = document.getElementById('contact-server');
+const container = document.getElementById('card-container');
+
+// Initial mock data (can be replaced by server response)
+var mockContradictions = [
+  { id: 1, type: 'Character', line: 3, page: 1, quote: 'his squad of three soldiers', explanation: "Contradicts the description on line 1: 'completely alone'." },
+  { id: 2, type: 'Setting', line: 3, page: 1, quote: 'the bright noon sunlight', explanation: "Contradicts the description on line 1: 'pitch black night'." },
+  { id: 3, type: 'Character', line: 4, page: 1, quote: 'a dark brown eye', explanation: "Contradicts the description on line 2: 'piercing blue eyes'." }
+];
+
+// Render contradiction cards
+function updateContradictions() {
+  container.innerHTML = '';
+  mockContradictions.forEach(item => {
+    const cardElement = document.createElement('div');
+    cardElement.className = 'card clickable';
+    cardElement.setAttribute('data-quote', item.quote);
+    cardElement.innerHTML = `
+      <div class="card-header">
+        <span class="card-type">${item.type}</span>
+      </div>
+      <blockquote class="card-quote">"${item.quote}"</blockquote>
+      <p class="card-explanation">${item.explanation}</p>
+    `;
+    cardElement.addEventListener('click', () => {
+      const quote = item.quote;
+      showToast('Moving to contradiction…');
+      google.script.run.withSuccessHandler(found => {
+        if (found) {
+          cardElement.classList.add('found');
+          showToast('Moved to contradiction.', 'success');
+        } else {
+          cardElement.classList.add('not-found');
+          showToast('Text not found in document.', 'error');
+        }
+        setTimeout(() => cardElement.classList.remove('found','not-found'), 1800);
+      }).jumpToContradiction(quote);
+    });
+    container.appendChild(cardElement);
+  });
+}
+
+// Toast utility
+function showToast(message, type) {
+  const root = document.getElementById('toast-root');
+  if (!root) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast' + (type ? ' ' + type : '');
+  toast.textContent = message;
+  root.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(6px)';
+    setTimeout(() => toast.remove(), 350);
+  }, 2400);
+}
+
+// Fetch contradictions from server
+function sendContradictionCheck(text) {
+  container.innerHTML = `
+    <div class="spinner-wrap">
+      <div class="spinner"></div>
+      <div class="spinner-text">Checking contradictions…</div>
+    </div>
+  `;
+
+  const prompt = `
+  Contradiction check the following prose, and ignore all chapter titles:
+
+  ${text}
+  `;
+
+  const TIMEOUT_MS = 90000; // 90s timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  fetch('https://canonchecker-server.onrender.com/check-this', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: prompt }),
+    signal: controller.signal
+  })
+  .then(response => {
+    clearTimeout(timeoutId);
+    if (response.status === 204) {
+      container.innerHTML = `<div class="card"><div class="card-header"><span class="card-type">None</span></div><p class="card-explanation" style="text-align:center;font-size:14px;">No contradictions found <span style=\"font-size:18px;\">🙂</span></p></div>`;
+      showToast('No contradictions found.', 'success');
+      return null;
+    }
+    return response.json();
+  })
+  .then(data => {
+    if (!data) return;
+    mockContradictions = data.response;
+    updateContradictions();
+    showToast('Contradictions loaded.', 'success');
+  })
+  .catch(error => {
+    const aborted = error.name === 'AbortError';
+    if (aborted) {
+      container.innerHTML = `<div class='card card-error'><div class='card-header'><span class='card-type'>Timeout</span></div><p class='card-explanation' style='text-align:center;font-size:14px;'>Could not contact server within ${(TIMEOUT_MS/1000)}s.</p></div>`;
+      showToast('Server timeout – please retry.', 'error');
+    } else {
+      container.innerHTML = `<div class='card card-error'><div class='card-header'><span class='card-type'>Error</span></div><p class='card-explanation' style='text-align:center;font-size:14px;'>Error fetching contradictions.</p></div>`;
+      showToast('Error fetching contradictions.', 'error');
+    }
+  });
+}
+
+// Auto-load on sidebar open
+window.addEventListener('load', () => {
+  container.innerHTML = `
+    <div class="spinner-wrap">
+      <div class="spinner"></div>
+      <div class="spinner-text">Loading document…</div>
+    </div>`;
+  google.script.run.withSuccessHandler(result => {
+    sendContradictionCheck(result);
+  }).getDocumentText();
+});
+
+// Manual refresh button
+testButton.addEventListener('click', () => {
+  google.script.run.withSuccessHandler(result => {
+    sendContradictionCheck(result);
+  }).getDocumentText();
+});
+</script>

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+    <?!= include('style'); ?>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+
+<body>
+
+  <div id="card-container" class="card-container">
+    <!-- The JavaScript will populate this area -->
+  </div>
+
+  <div id="server-message" class="message-field">
+    <button id="contact-server" class="primary-button">Check Contradictions!</button>
+  </div>
+
+  <!-- Toast container for jump feedback -->
+  <div id="toast-root" class="toast-container"></div>
+
+  <?!= include('script'); ?>
+
+</body>
+
+</html>
